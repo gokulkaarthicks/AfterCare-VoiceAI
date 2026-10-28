@@ -1,0 +1,210 @@
+# AfterCare: full stack (from repository root: `docker compose up --build`)
+# Twilio voice: run ngrok on the host (`ngrok http 8002`) and set TWILIO_WEBHOOK_BASE_URL in `.env`.
+
+name: aftercare
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    # `ping` can succeed before the AMQP listener on 5672 accepts connections, which breaks
+    # aio_pika on first connect. Require the port listener so dependents start safely.
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_listener", "5672"]
+      interval: 10s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db_service:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+      args:
+        SERVICE_MODULE: app.api.db:app
+        SERVICE_PORT: "8003"
+    ports:
+      - "8003:8003"
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq/
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: sqlite+aiosqlite:///./data/aftercare.db
+      DB_SERVICE_URL: http://db_service:8003
+      TRIAGE_AGENT_URL: http://triage_agent:8001
+      FOLLOWUP_AGENT_URL: http://followup_agent:8002
+      SCHEDULER_URL: http://scheduler:8004
+    volumes:
+      - sqlite_data:/app/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8003/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  triage_agent:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+      args:
+        SERVICE_MODULE: app.api.triage:app
+        SERVICE_PORT: "8001"
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq/
+      REDIS_URL: redis://redis:6379
+      DB_SERVICE_URL: http://db_service:8003
+      TRIAGE_AGENT_URL: http://triage_agent:8001
+      FOLLOWUP_AGENT_URL: http://followup_agent:8002
+      SCHEDULER_URL: http://scheduler:8004
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db_service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  followup_agent:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+      args:
+        SERVICE_MODULE: app.api.followup:app
+        SERVICE_PORT: "8002"
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq/
+      REDIS_URL: redis://redis:6379
+      DB_SERVICE_URL: http://db_service:8003
+      TRIAGE_AGENT_URL: http://triage_agent:8001
+      FOLLOWUP_AGENT_URL: http://followup_agent:8002
+      SCHEDULER_URL: http://scheduler:8004
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db_service:
+        condition: service_healthy
+      triage_agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8002/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+      args:
+        SERVICE_MODULE: app.api.scheduler:app
+        SERVICE_PORT: "8004"
+    ports:
+      - "8004:8004"
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq/
+      REDIS_URL: redis://redis:6379
+      FOLLOWUP_AGENT_URL: http://followup_agent:8002
+      DB_SERVICE_URL: http://db_service:8003
+      TRIAGE_AGENT_URL: http://triage_agent:8001
+      SCHEDULER_URL: http://scheduler:8004
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db_service:
+        condition: service_healthy
+      followup_agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8004/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: ../infra/Dockerfile.dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+      NEXT_PUBLIC_DB_SERVICE_URL: http://localhost:8003
+      NEXT_PUBLIC_TRIAGE_AGENT_URL: http://localhost:8001
+      NEXT_PUBLIC_SCHEDULER_URL: http://localhost:8004
+    depends_on:
+      db_service:
+        condition: service_healthy
+
+  # Run full demo against compose DNS: `docker compose --profile tooling run --rm tooling`
+  tooling:
+    profiles: ["tooling"]
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+      args:
+        SERVICE_MODULE: app.api.db:app
+        SERVICE_PORT: "8003"
+    env_file:
+      - .env
+    working_dir: /app
+    environment:
+      TRIAGE_AGENT_URL: http://triage_agent:8001
+      FOLLOWUP_AGENT_URL: http://followup_agent:8002
+      DB_SERVICE_URL: http://db_service:8003
+      SCHEDULER_URL: http://scheduler:8004
+      FRONTEND_URL: http://localhost:3000
+    entrypoint: ["uv", "run", "python"]
+    command: ["scripts/demo_flow.py"]
+    depends_on:
+      triage_agent:
+        condition: service_healthy
+      followup_agent:
+        condition: service_healthy
+      db_service:
+        condition: service_healthy
+      scheduler:
+        condition: service_healthy
+
+volumes:
+  sqlite_data:

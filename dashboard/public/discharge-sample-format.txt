@@ -1,0 +1,39 @@
+AfterCare: Sample discharge summary
+====================================
+
+Patient name: Ramcharan Suresh
+Date of birth: 1959-01-20
+Phone: +18128780868
+Email: ramcharan.suresh@gmail.com
+
+Admission date: 2026-03-20
+Date of discharge: 2026-03-28
+
+Primary diagnosis: Community-acquired pneumonia (CAP): clinical improvement on antibiotics
+
+Procedures performed:
+- Chest X-ray on admission showing right lower lobe infiltrate
+- Supplemental oxygen weaned to room air
+- Transition from IV ceftriaxone to oral amoxicillin-clavulanate
+
+Hospital course:
+Patient admitted with fever, productive cough, and hypoxia. Treated with ceftriaxone and azithromycin with good response. Oxygen weaned to room air by day 4. Remained hemodynamically stable. Ready for discharge with oral antibiotics and close follow-up.
+
+Discharge medications (name, dose, frequency):
+1. Amoxicillin-clavulanate 875/125 mg twice daily: complete 7-day course
+2. Albuterol inhaler 90 mcg, 2 puffs every 4-6 hours as needed for wheeze
+3. Acetaminophen 650 mg every 6 hours as needed for fever or pain
+
+Follow-up instructions:
+- Follow up with primary care in 1 week
+- Pulmonology referral if cough or shortness of breath persists beyond 2 weeks
+- Complete the full antibiotic course even if feeling better
+- Rest, hydrate, and monitor temperature daily
+
+Warning signs to report (call 911 or return to ED):
+- Fever above 100.4°F (38°C)
+- Worsening shortness of breath or chest pain
+- Confusion, fainting, or inability to keep fluids down
+- Coughing up blood
+
+Attending physician: Dr. Meredith Grey, MD
